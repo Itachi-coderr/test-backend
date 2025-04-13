@@ -9,10 +9,21 @@ const { protect } = require('./middleware/auth');
 
 const app = express();
 
-// Connect to MongoDB
+// Connect to MongoDB with more detailed logging
 mongoose.connect(process.env.MONGODB_URI)
-    .then(() => console.log('Connected to MongoDB'))
-    .catch(err => console.error('MongoDB connection error:', err));
+    .then(() => {
+        console.log('Connected to MongoDB Successfully');
+        console.log('Database connection state:', mongoose.connection.readyState);
+    })
+    .catch(err => {
+        console.error('MongoDB connection error:', err);
+        console.error('MongoDB URI:', process.env.MONGODB_URI ? 'URI is set' : 'URI is missing');
+    });
+
+// Log MongoDB connection state changes
+mongoose.connection.on('connected', () => console.log('MongoDB connected'));
+mongoose.connection.on('error', err => console.log('MongoDB error:', err));
+mongoose.connection.on('disconnected', () => console.log('MongoDB disconnected'));
 
 // Middleware
 app.use(cors({
@@ -22,19 +33,43 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
-// Test route
+// Test route with MongoDB status
 app.get("/", (req, res) => {
-    res.send("Server is Ready");
+    const dbState = mongoose.connection.readyState;
+    res.json({
+        message: "Server is Ready",
+        mongoDBStatus: dbState === 1 ? 'Connected' : 'Not Connected',
+        dbState: dbState
+    });
 });
 
 // Auth routes
 app.post("/api/auth/register", async (req, res) => {
     try {
+        console.log('Registration attempt:', req.body);
+        
         const { name, email, password } = req.body;
 
+        // Validate input
+        if (!name || !email || !password) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide all required fields'
+            });
+        }
+
+        // Check MongoDB connection
+        if (mongoose.connection.readyState !== 1) {
+            console.error('MongoDB not connected. Current state:', mongoose.connection.readyState);
+            return res.status(500).json({
+                success: false,
+                message: 'Database connection error'
+            });
+        }
+
         // Check if user exists
-        let user = await User.findOne({ email });
-        if (user) {
+        let existingUser = await User.findOne({ email });
+        if (existingUser) {
             return res.status(400).json({
                 success: false,
                 message: 'User already exists'
@@ -42,11 +77,13 @@ app.post("/api/auth/register", async (req, res) => {
         }
 
         // Create user
-        user = await User.create({
+        const user = await User.create({
             name,
             email,
             password
         });
+
+        console.log('User created successfully:', user._id);
 
         // Create token
         const token = createToken(user._id);
@@ -62,10 +99,11 @@ app.post("/api/auth/register", async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Register error:', error);
+        console.error('Registration error details:', error);
         res.status(500).json({
             success: false,
-            message: error.message || 'Error in registration'
+            message: error.message || 'Error in registration',
+            error: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 });
