@@ -2,13 +2,20 @@ require('dotenv').config();
 const User = require('../../models/User');
 const { createToken } = require('../../utils/jwt');
 const dbConnect = require('../../utils/dbConnect');
-const corsMiddleware = require('../../utils/cors');
 
 module.exports = async (req, res) => {
-    try {
-        // Handle CORS
-        await corsMiddleware(req, res);
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Credentials', true);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
+    // Handle preflight request
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+
+    try {
         if (req.method !== 'POST') {
             return res.status(405).json({ message: 'Method not allowed' });
         }
