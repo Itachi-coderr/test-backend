@@ -2,13 +2,17 @@ require('dotenv').config();
 const User = require('../../models/User');
 const { createToken } = require('../../utils/jwt');
 const dbConnect = require('../../utils/dbConnect');
+const corsMiddleware = require('../../utils/cors');
 
 module.exports = async (req, res) => {
-    if (req.method !== 'POST') {
-        return res.status(405).json({ message: 'Method not allowed' });
-    }
-
     try {
+        // Handle CORS
+        await corsMiddleware(req, res);
+
+        if (req.method !== 'POST') {
+            return res.status(405).json({ message: 'Method not allowed' });
+        }
+
         // Connect to database
         await dbConnect();
         console.log('Database connected in login endpoint');
