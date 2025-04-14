@@ -10,26 +10,60 @@ const { protect } = require('./middleware/auth');
 const app = express();
 
 // Connect to MongoDB with more detailed logging
-mongoose.connect(process.env.MONGODB_URI)
-    .then(() => {
+const connectDB = async () => {
+    try {
+        if (mongoose.connection.readyState === 1) {
+            console.log('MongoDB already connected');
+            return;
+        }
+
+        console.log('Attempting to connect to MongoDB...');
+        console.log('MongoDB URI:', process.env.MONGODB_URI ? 'URI is set' : 'URI is missing');
+        
+        await mongoose.connect(process.env.MONGODB_URI, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+            serverSelectionTimeoutMS: 5000,
+            socketTimeoutMS: 45000,
+        });
+        
         console.log('Connected to MongoDB Successfully');
         console.log('Database connection state:', mongoose.connection.readyState);
-    })
-    .catch(err => {
+    } catch (err) {
         console.error('MongoDB connection error:', err);
         console.error('MongoDB URI:', process.env.MONGODB_URI ? 'URI is set' : 'URI is missing');
-    });
+        // Don't throw the error, just log it
+    }
+};
+
+// Call connectDB immediately
+connectDB();
 
 // Log MongoDB connection state changes
 mongoose.connection.on('connected', () => console.log('MongoDB connected'));
 mongoose.connection.on('error', err => console.log('MongoDB error:', err));
-mongoose.connection.on('disconnected', () => console.log('MongoDB disconnected'));
+mongoose.connection.on('disconnected', () => {
+    console.log('MongoDB disconnected, attempting to reconnect...');
+    setTimeout(connectDB, 5000);
+});
 
 // Middleware
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:3000', 'https://test-frontend-nine.vercel.app'],
-    credentials: true
+    origin: [
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'https://test-frontend-nine.vercel.app',
+        'https://test-frontend-d1c96wcgt-muhammad-umars-projects-1e4bc850.vercel.app',
+        'https://test-frontend-*.vercel.app'
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+// Handle preflight requests
+app.options('*', cors());
+
 app.use(express.json());
 app.use(cookieParser());
 
@@ -58,13 +92,19 @@ app.post("/api/auth/register", async (req, res) => {
             });
         }
 
-        // Check MongoDB connection
+        // Check MongoDB connection and attempt to reconnect if needed
         if (mongoose.connection.readyState !== 1) {
-            console.error('MongoDB not connected. Current state:', mongoose.connection.readyState);
-            return res.status(500).json({
-                success: false,
-                message: 'Database connection error'
-            });
+            console.log('MongoDB not connected, attempting to reconnect...');
+            await connectDB();
+            
+            if (mongoose.connection.readyState !== 1) {
+                console.error('MongoDB still not connected after retry');
+                return res.status(500).json({
+                    success: false,
+                    message: 'Database connection error',
+                    details: 'Unable to establish database connection'
+                });
+            }
         }
 
         // Check if user exists
