@@ -4,13 +4,11 @@ const { createToken } = require('../../utils/jwt');
 const dbConnect = require('../../utils/dbConnect');
 
 module.exports = async (req, res) => {
-    const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
-    
     // Set CORS headers
-    res.setHeader('Access-Control-Allow-Credentials', 'false');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
+    res.setHeader('Access-Control-Allow-Origin', 'https://test-frontend-phi-two.vercel.app');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
 
     // Handle preflight request
     if (req.method === 'OPTIONS') {
@@ -28,6 +26,7 @@ module.exports = async (req, res) => {
         console.log('Database connected in login endpoint');
 
         const { email, password } = req.body;
+        console.log('Login attempt for:', email);
 
         // Validate input
         if (!email || !password) {
@@ -56,6 +55,8 @@ module.exports = async (req, res) => {
                 message: 'Invalid credentials'
             });
         }
+
+        console.log('Login successful for user:', user._id);
 
         // Create token
         const token = createToken(user._id);
